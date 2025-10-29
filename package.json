@@ -1,5 +1,5 @@
 {
-  "name": "smartclass-assistant",
+  "name": "smartclass-backend",
   "version": "1.0.0",
   "type": "module",
   "main": "server.js",
@@ -7,9 +7,9 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.10.0",
-    "body-parser": "^1.20.2",
-    "cors": "^2.8.5",
-    "express": "^4.18.2"
+    "express": "^4.19.2",
+    "body-parser": "^1.20.3",
+    "node-fetch": "^3.3.2",
+    "cors": "^2.8.5"
   }
 }
