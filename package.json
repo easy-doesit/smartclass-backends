@@ -1,6 +1,16 @@
-"dependencies": {
-  "express": "^4.19.2",
-  "body-parser": "^1.20.2",
-  "node-fetch": "^3.3.2",
-  "cors": "^2.8.5"
+{
+  "name": "smartclass-backend",
+  "version": "1.0.0",
+  "description": "SmartClass Academic Assistant Backend",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "body-parser": "^1.20.2",
+    "node-fetch": "^3.3.2",
+    "cors": "^2.8.5"
+  }
 }
