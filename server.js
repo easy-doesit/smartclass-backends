@@ -4,19 +4,11 @@ import fetch from "node-fetch";
 import cors from "cors";
 
 const app = express();
-
-// ✅ Allow your Blogspot domain to access the API
-app.use(cors({
-  origin: "*", // You can restrict to your actual Blogspot URL later
-  methods: ["POST"],
-  allowedHeaders: ["Content-Type"],
-}));
-
+app.use(cors());
 app.use(bodyParser.json());
 
 app.post("/api/chat", async (req, res) => {
   const { message } = req.body;
-
   try {
     const response = await fetch(
       "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" +
@@ -31,14 +23,12 @@ app.post("/api/chat", async (req, res) => {
     );
 
     const data = await response.json();
-
     const reply =
       data?.candidates?.[0]?.content?.parts?.[0]?.text ||
       "Sorry, no response from Gemini.";
-
     res.json({ reply });
   } catch (err) {
-    console.error("Error:", err);
+    console.error("❌ Server error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
