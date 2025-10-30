@@ -1,6 +1,9 @@
 import express from "express";
 import bodyParser from "body-parser";
 import fetch from "node-fetch";
+import dotenv from "dotenv";
+
+dotenv.config(); // load environment variables
 
 const app = express();
 app.use(bodyParser.json());
@@ -35,16 +38,26 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-// === TEMPORARY DEBUG ROUTE — check if GEMINI_API_KEY exists ===
+// === Safe dynamic /env route ===
 app.get("/env", (req, res) => {
-  const hasKey = !!process.env.GEMINI_API_KEY;
+  // List of sensitive keywords to never expose
+  const sensitiveKeywords = ["KEY", "SECRET", "PASSWORD", "TOKEN", "API"];
+
+  const safeEnv = {};
+  Object.keys(process.env).forEach((key) => {
+    const isSensitive = sensitiveKeywords.some((word) =>
+      key.toUpperCase().includes(word)
+    );
+    if (!isSensitive) safeEnv[key] = process.env[key];
+  });
+
   res.json({
-    status: hasKey ? "✅ API key detected" : "❌ No API key found",
-    keyPreview: hasKey ? process.env.GEMINI_API_KEY.slice(0, 8) + "..." : null,
+    ...safeEnv,
+    GEMINI_KEY_EXISTS: !!process.env.GEMINI_API_KEY, // safe boolean for testing
   });
 });
 
-// === Default route (optional) ===
+// === Default route ===
 app.get("/", (req, res) => {
   res.send("✅ SmartClass backend is running with Gemini 2.5 Flash.");
 });
