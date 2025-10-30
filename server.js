@@ -35,6 +35,15 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
+// === TEMPORARY DEBUG ROUTE — check if GEMINI_API_KEY exists ===
+app.get("/env", (req, res) => {
+  const hasKey = !!process.env.GEMINI_API_KEY;
+  res.json({
+    status: hasKey ? "✅ API key detected" : "❌ No API key found",
+    keyPreview: hasKey ? process.env.GEMINI_API_KEY.slice(0, 8) + "..." : null,
+  });
+});
+
 // === Default route (optional) ===
 app.get("/", (req, res) => {
   res.send("✅ SmartClass backend is running with Gemini 2.5 Flash.");
