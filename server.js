@@ -1,9 +1,6 @@
 import express from "express";
 import bodyParser from "body-parser";
 import fetch from "node-fetch";
-import dotenv from "dotenv";
-
-dotenv.config(); // load environment variables
 
 const app = express();
 app.use(bodyParser.json());
@@ -38,12 +35,12 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-// === Safe dynamic /env route ===
+// === Safe /env route improvement ===
 app.get("/env", (req, res) => {
-  // List of sensitive keywords to never expose
+  // Only include non-sensitive environment variables
   const sensitiveKeywords = ["KEY", "SECRET", "PASSWORD", "TOKEN", "API"];
-
   const safeEnv = {};
+
   Object.keys(process.env).forEach((key) => {
     const isSensitive = sensitiveKeywords.some((word) =>
       key.toUpperCase().includes(word)
@@ -53,7 +50,7 @@ app.get("/env", (req, res) => {
 
   res.json({
     ...safeEnv,
-    GEMINI_KEY_EXISTS: !!process.env.GEMINI_API_KEY, // safe boolean for testing
+    GEMINI_KEY_EXISTS: !!process.env.GEMINI_API_KEY, // safe check
   });
 });
 
