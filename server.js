@@ -35,23 +35,18 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-// === Safe /env route improvement ===
+// === Simplified /env route (clean output) ===
 app.get("/env", (req, res) => {
-  // Only include non-sensitive environment variables
-  const sensitiveKeywords = ["KEY", "SECRET", "PASSWORD", "TOKEN", "API"];
-  const safeEnv = {};
+  const envInfo = {
+    status: "✅ Backend is live",
+    NODE_ENV: process.env.NODE_ENV || "development",
+    PORT: process.env.PORT || 8080,
+    APP_NAME: process.env.APP_NAME || "SmartClass",
+    GEMINI_KEY_EXISTS: !!process.env.GEMINI_API_KEY,
+    DEPLOY_URL: process.env.RENDER_EXTERNAL_URL || "unknown",
+  };
 
-  Object.keys(process.env).forEach((key) => {
-    const isSensitive = sensitiveKeywords.some((word) =>
-      key.toUpperCase().includes(word)
-    );
-    if (!isSensitive) safeEnv[key] = process.env[key];
-  });
-
-  res.json({
-    ...safeEnv,
-    GEMINI_KEY_EXISTS: !!process.env.GEMINI_API_KEY, // safe check
-  });
+  res.json(envInfo);
 });
 
 // === Default route ===
