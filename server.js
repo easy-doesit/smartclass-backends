@@ -1,8 +1,10 @@
 import express from "express";
 import bodyParser from "body-parser";
 import fetch from "node-fetch";
+import cors from "cors"; 
 
 const app = express();
+app.use(cors()); // ✅ enable this before routes
 app.use(bodyParser.json());
 
 // === Chat endpoint ===
