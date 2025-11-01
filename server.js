@@ -1,60 +1,63 @@
 import express from "express";
 import bodyParser from "body-parser";
 import fetch from "node-fetch";
+import cors from "cors";
 
 const app = express();
+app.use(cors());
 app.use(bodyParser.json());
 
-// === Chat endpoint ===
+// === Chat Endpoint ===
 app.post("/api/chat", async (req, res) => {
   const { message } = req.body;
-  if (!message) return res.status(400).json({ error: "No message provided" });
+  if (!message) return res.status(400).json({ reply: "⚠️ No message provided." });
 
   const start = Date.now();
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20000); // 20s timeout
 
-  try {
-    const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" +
-        process.env.GEMINI_API_KEY,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: message }] }],
-        }),
-        signal: controller.signal,
-      }
-    );
+  async function fetchGemini() {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
-    clearTimeout(timeout);
+    try {
+      const response = await fetch(
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" +
+          process.env.GEMINI_API_KEY,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: message }] }],
+          }),
+          signal: controller.signal,
+        }
+      );
 
-    const data = await response.json();
-    const reply =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "⚠️ Sorry, I couldn’t generate a response right now.";
-
-    const elapsed = ((Date.now() - start) / 1000).toFixed(2);
-    console.log(`🧠 Gemini replied in ${elapsed}s`);
-
-    res.json({ reply, elapsed });
-  } catch (err) {
-    clearTimeout(timeout);
-
-    if (err.name === "AbortError") {
-      console.error("⏱️ Request timed out after 20s.");
-      return res
-        .status(504)
-        .json({ error: "Gemini API timeout after 20s", elapsed: "20+" });
+      clearTimeout(timeout);
+      return await response.json();
+    } catch (err) {
+      clearTimeout(timeout);
+      console.error("Gemini request error:", err.message);
+      return null;
     }
-
-    console.error("❌ Chat endpoint error:", err);
-    res.status(500).json({ error: "Server error. Please try again later." });
   }
+
+  let data = await fetchGemini();
+  if (!data) {
+    console.log("Retrying once...");
+    data = await fetchGemini();
+  }
+
+  const reply =
+    data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+    "🤖 SmartClass is currently busy. Please try again shortly.";
+
+  const elapsed = ((Date.now() - start) / 1000).toFixed(2);
+  console.log(`🧠 Gemini responded in ${elapsed}s`);
+
+  res.json({ reply });
 });
 
-// === /env route — safe debug info ===
+// === /env Route ===
 app.get("/env", (req, res) => {
   const hasKey = !!process.env.GEMINI_API_KEY;
   res.json({
@@ -67,13 +70,11 @@ app.get("/env", (req, res) => {
   });
 });
 
-// === Root route ===
+// === Root Route ===
 app.get("/", (req, res) => {
-  res.send("✅ SmartClass backend is running with Gemini 2.5 Flash (optimized).");
+  res.send("✅ SmartClass backend running with Gemini 2.5 Flash (stable).");
 });
 
-// === Start server ===
+// === Start Server ===
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () =>
-  console.log(`✅ SmartClass backend running on port ${PORT}`)
-);
+app.listen(PORT, () => console.log(`✅ SmartClass backend running on port ${PORT}`));
