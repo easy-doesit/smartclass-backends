@@ -10,13 +10,14 @@ app.use(bodyParser.json());
 // === Chat Endpoint ===
 app.post("/api/chat", async (req, res) => {
   const { message } = req.body;
-  if (!message) return res.status(400).json({ reply: "⚠️ No message provided." });
+  if (!message)
+    return res.status(400).json({ reply: "⚠️ No message provided." });
 
   const start = Date.now();
 
   async function fetchGemini() {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000); // 30s timeout
+    const timeout = setTimeout(() => controller.abort(), 20000); // ⏱ 20s timeout
 
     try {
       const response = await fetch(
@@ -33,23 +34,38 @@ app.post("/api/chat", async (req, res) => {
       );
 
       clearTimeout(timeout);
+
+      if (!response.ok) {
+        console.error("Gemini HTTP error:", response.status, response.statusText);
+        return null;
+      }
+
       return await response.json();
     } catch (err) {
       clearTimeout(timeout);
-      console.error("Gemini request error:", err.message);
+      console.error("⚠️ Gemini request error:", err.name, err.message);
       return null;
     }
   }
 
+  // === Attempt once, retry if failed ===
   let data = await fetchGemini();
   if (!data) {
-    console.log("Retrying once...");
+    console.log("🔁 Retrying Gemini once...");
     data = await fetchGemini();
   }
 
-  const reply =
-    data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-    "🤖 SmartClass is currently busy. Please try again shortly.";
+  // === Build safe fallback ===
+  let reply;
+  if (data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+    reply = data.candidates[0].content.parts[0].text;
+  } else if (data?.promptFeedback?.blockReason) {
+    reply =
+      "⚠️ SmartClass couldn’t generate a reply due to content restrictions.";
+  } else {
+    reply =
+      "🤖 SmartClass is temporarily busy or unreachable. Please try again shortly.";
+  }
 
   const elapsed = ((Date.now() - start) / 1000).toFixed(2);
   console.log(`🧠 Gemini responded in ${elapsed}s`);
@@ -77,4 +93,6 @@ app.get("/", (req, res) => {
 
 // === Start Server ===
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => console.log(`✅ SmartClass backend running on port ${PORT}`));
+app.listen(PORT, () =>
+  console.log(`✅ SmartClass backend running on port ${PORT}`)
+);
