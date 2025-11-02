@@ -17,7 +17,7 @@ app.post("/api/chat", async (req, res) => {
 
   async function fetchGemini() {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000); // ⏱ 20s timeout
+    const timeout = setTimeout(() => controller.abort(), 45000); // ⏱ 45s timeout
 
     try {
       const response = await fetch(
@@ -36,39 +36,42 @@ app.post("/api/chat", async (req, res) => {
       clearTimeout(timeout);
 
       if (!response.ok) {
-        console.error("Gemini HTTP error:", response.status, response.statusText);
+        console.error("❌ Gemini HTTP error:", response.status, response.statusText);
         return null;
       }
 
-      return await response.json();
+      const data = await response.json();
+
+      // Defensive parsing
+      const reply =
+        data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+
+      if (!reply) {
+        console.warn("⚠️ Empty or malformed Gemini response:", JSON.stringify(data).slice(0, 200));
+      }
+
+      return reply;
     } catch (err) {
       clearTimeout(timeout);
-      console.error("⚠️ Gemini request error:", err.name, err.message);
+      console.error("🚨 Gemini request error:", err.name, err.message);
       return null;
     }
   }
 
   // === Attempt once, retry if failed ===
-  let data = await fetchGemini();
-  if (!data) {
+  let reply = await fetchGemini();
+  if (!reply) {
     console.log("🔁 Retrying Gemini once...");
-    data = await fetchGemini();
+    reply = await fetchGemini();
   }
 
-  // === Build safe fallback ===
-  let reply;
-  if (data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-    reply = data.candidates[0].content.parts[0].text;
-  } else if (data?.promptFeedback?.blockReason) {
-    reply =
-      "⚠️ SmartClass couldn’t generate a reply due to content restrictions.";
-  } else {
+  // === Fallback message ===
+  if (!reply)
     reply =
       "🤖 SmartClass is temporarily busy or unreachable. Please try again shortly.";
-  }
 
   const elapsed = ((Date.now() - start) / 1000).toFixed(2);
-  console.log(`🧠 Gemini responded in ${elapsed}s`);
+  console.log(`🧠 Gemini responded in ${elapsed}s → ${reply.slice(0, 80)}...`);
 
   res.json({ reply });
 });
