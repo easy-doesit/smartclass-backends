@@ -4,105 +4,93 @@ import fetch from "node-fetch";
 import cors from "cors";
 
 const app = express();
+app.use(cors());
+app.use(bodyParser.json({ limit: "20mb" })); // supports files
 
-// --- CORS FIX (WORDPRESS + CODEPEN + RENDER ACCEPTED) ---
-app.use(
-  cors({
-    origin: [
-      "https://codepen.io",
-      "https://cdpn.io",
-      /\.wordpress\.com$/,
-      /\.wp\.com$/,
-      process.env.RENDER_EXTERNAL_URL
-    ],
-    credentials: true
-  })
-);
-
-app.use(bodyParser.json({ limit: "20mb" })); // support base64 files
-
-// === Chat Endpoint ===
+// =========================
+//   CHAT ROUTE (MAIN API)
+// =========================
 app.post("/api/chat", async (req, res) => {
-  const { message, model, file } = req.body;
+  try {
+    const { messages, model, attachments } = req.body;
 
-  if (!message && !file)
-    return res.status(400).json({ reply: "⚠️ No input received." });
-
-  const start = Date.now();
-
-  // Convert base64 file to Gemini inlineData format if present
-  let filePart = null;
-
-  if (file?.data) {
-    filePart = {
-      inlineData: {
-        mimeType: file.type,
-        data: file.data.split(",")[1] // remove "data:...;base64,"
-      }
-    };
-  }
-
-  async function fetchGemini() {
-    try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model || "gemini-2.5-flash"}:generateContent?key=${process.env.GEMINI_API_KEY}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            contents: [
-              {
-                role: "user",
-                parts: [
-                  ...(filePart ? [filePart] : []),
-                  ...(message ? [{ text: message }] : [])
-                ]
-              }
-            ]
-          })
-        }
-      );
-
-      const data = await response.json();
-
-      return (
-        data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ||
-        null
-      );
-    } catch (err) {
-      console.error("Gemini error:", err);
-      return null;
+    if (!messages || !messages.length) {
+      return res.status(400).json({ reply: "⚠️ Missing messages array." });
     }
+
+    const userInput = messages[messages.length - 1].content || "";
+
+    // CONVERT to Gemini format
+    const geminiInput = {
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: userInput },
+
+            // If file attachments exist, include them
+            ...(attachments || []).map((f) => ({
+              inlineData: {
+                mimeType: f.type || "application/octet-stream",
+                data: f.content, // base64
+              }
+            })),
+          ],
+        },
+      ],
+    };
+
+    // CALL GEMINI
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(geminiInput),
+      }
+    );
+
+    if (!response.ok) {
+      console.error("Gemini error", await response.text());
+      return res.status(500).json({ reply: "❌ Gemini returned an error." });
+    }
+
+    const data = await response.json();
+
+    const reply =
+      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "⚠️ No reply generated.";
+
+    return res.json({ reply });
+  } catch (err) {
+    console.error("Backend crash:", err);
+    return res.status(500).json({ reply: "❌ Server error occurred." });
   }
-
-  let reply = await fetchGemini();
-  if (!reply) reply = "⚠️ SmartClass is busy. Try again.";
-
-  res.json({ reply });
 });
 
-// === /env Route (kept the same) ===
+// ====================================
+//   ENV CHECK ROUTE (for debugging)
+// ====================================
 app.get("/env", (req, res) => {
-  const hasKey = !!process.env.GEMINI_API_KEY;
   res.json({
-    status: hasKey ? "✅ API key detected" : "❌ No API key found",
-    GEMINI_KEY_EXISTS: hasKey,
+    GEMINI_KEY_EXISTS: !!process.env.GEMINI_API_KEY,
     NODE_ENV: process.env.NODE_ENV,
     PORT: process.env.PORT,
-    APP_NAME: "SmartClass",
-    DEPLOY_URL: process.env.RENDER_EXTERNAL_URL || "local"
+    OK: true,
   });
 });
 
-// === Root Route ===
+// =========================
+//   ROOT ROUTE
+// =========================
 app.get("/", (req, res) => {
-  res.send("✅ SmartClass backend running with Gemini 2.5 Flash.");
+  res.send("SmartClass Backend Running ✔️");
 });
 
-// === Start Server ===
+// =========================
+//   SERVER START
+// =========================
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () =>
-  console.log(`🚀 SmartClass backend running on port ${PORT}`)
-);
+app.listen(PORT, () => {
+  console.log(`🚀 SmartClass backend running on port ${PORT}`);
+});
