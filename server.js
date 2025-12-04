@@ -4,79 +4,86 @@ import fetch from "node-fetch";
 import cors from "cors";
 
 const app = express();
-app.use(cors());
-app.use(bodyParser.json());
+
+// --- CORS FIX (WORDPRESS + CODEPEN + RENDER ACCEPTED) ---
+app.use(
+  cors({
+    origin: [
+      "https://codepen.io",
+      "https://cdpn.io",
+      /\.wordpress\.com$/,
+      /\.wp\.com$/,
+      process.env.RENDER_EXTERNAL_URL
+    ],
+    credentials: true
+  })
+);
+
+app.use(bodyParser.json({ limit: "20mb" })); // support base64 files
 
 // === Chat Endpoint ===
 app.post("/api/chat", async (req, res) => {
-  const { message } = req.body;
-  if (!message)
-    return res.status(400).json({ reply: "⚠️ No message provided." });
+  const { message, model, file } = req.body;
+
+  if (!message && !file)
+    return res.status(400).json({ reply: "⚠️ No input received." });
 
   const start = Date.now();
 
-  async function fetchGemini() {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 45000); // ⏱ 45s timeout
+  // Convert base64 file to Gemini inlineData format if present
+  let filePart = null;
 
+  if (file?.data) {
+    filePart = {
+      inlineData: {
+        mimeType: file.type,
+        data: file.data.split(",")[1] // remove "data:...;base64,"
+      }
+    };
+  }
+
+  async function fetchGemini() {
     try {
       const response = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" +
-          process.env.GEMINI_API_KEY,
+        `https://generativelanguage.googleapis.com/v1beta/models/${model || "gemini-2.5-flash"}:generateContent?key=${process.env.GEMINI_API_KEY}`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json"
+          },
           body: JSON.stringify({
-            contents: [{ role: "user", parts: [{ text: message }] }],
-          }),
-          signal: controller.signal,
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  ...(filePart ? [filePart] : []),
+                  ...(message ? [{ text: message }] : [])
+                ]
+              }
+            ]
+          })
         }
       );
 
-      clearTimeout(timeout);
-
-      if (!response.ok) {
-        console.error("❌ Gemini HTTP error:", response.status, response.statusText);
-        return null;
-      }
-
       const data = await response.json();
 
-      // Defensive parsing
-      const reply =
-        data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
-
-      if (!reply) {
-        console.warn("⚠️ Empty or malformed Gemini response:", JSON.stringify(data).slice(0, 200));
-      }
-
-      return reply;
+      return (
+        data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ||
+        null
+      );
     } catch (err) {
-      clearTimeout(timeout);
-      console.error("🚨 Gemini request error:", err.name, err.message);
+      console.error("Gemini error:", err);
       return null;
     }
   }
 
-  // === Attempt once, retry if failed ===
   let reply = await fetchGemini();
-  if (!reply) {
-    console.log("🔁 Retrying Gemini once...");
-    reply = await fetchGemini();
-  }
-
-  // === Fallback message ===
-  if (!reply)
-    reply =
-      "🤖 SmartClass is temporarily busy or unreachable. Please try again shortly.";
-
-  const elapsed = ((Date.now() - start) / 1000).toFixed(2);
-  console.log(`🧠 Gemini responded in ${elapsed}s → ${reply.slice(0, 80)}...`);
+  if (!reply) reply = "⚠️ SmartClass is busy. Try again.";
 
   res.json({ reply });
 });
 
-// === /env Route ===
+// === /env Route (kept the same) ===
 app.get("/env", (req, res) => {
   const hasKey = !!process.env.GEMINI_API_KEY;
   res.json({
@@ -85,17 +92,17 @@ app.get("/env", (req, res) => {
     NODE_ENV: process.env.NODE_ENV,
     PORT: process.env.PORT,
     APP_NAME: "SmartClass",
-    DEPLOY_URL: process.env.RENDER_EXTERNAL_URL || "local",
+    DEPLOY_URL: process.env.RENDER_EXTERNAL_URL || "local"
   });
 });
 
 // === Root Route ===
 app.get("/", (req, res) => {
-  res.send("✅ SmartClass backend running with Gemini 2.5 Flash (stable).");
+  res.send("✅ SmartClass backend running with Gemini 2.5 Flash.");
 });
 
 // === Start Server ===
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () =>
-  console.log(`✅ SmartClass backend running on port ${PORT}`)
+  console.log(`🚀 SmartClass backend running on port ${PORT}`)
 );
